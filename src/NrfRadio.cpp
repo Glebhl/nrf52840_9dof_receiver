@@ -25,8 +25,25 @@ void NrfRadio::startHfclk() {
   }
 }
 
+void NrfRadio::disableRadio() {
+  if ((NRF_RADIO->STATE & RADIO_STATE_STATE_Msk) ==
+      (RADIO_STATE_STATE_Disabled << RADIO_STATE_STATE_Pos)) {
+    rxActive_ = false;
+    return;
+  }
+
+  NRF_RADIO->EVENTS_DISABLED = 0;
+  NRF_RADIO->TASKS_DISABLE = 1;
+  while (NRF_RADIO->EVENTS_DISABLED == 0) {
+  }
+  NRF_RADIO->EVENTS_DISABLED = 0;
+  rxActive_ = false;
+}
+
 void NrfRadio::configureCommon() {
   startHfclk();
+
+  disableRadio();
 
   NRF_RADIO->POWER = 1;
 
@@ -80,6 +97,8 @@ bool NrfRadio::beginRx() {
 }
 
 void NrfRadio::send(const uint8_t* data, uint8_t len) {
+  disableRadio();
+
   if (len > RadioLink::kMaxLen) len = RadioLink::kMaxLen;
   buf_[0] = len;
   memcpy(&buf_[1], data, len);
@@ -104,6 +123,8 @@ void NrfRadio::send(const uint8_t* data, uint8_t len) {
 }
 
 void NrfRadio::startRx() {
+  disableRadio();
+
   NRF_RADIO->PACKETPTR = (uint32_t)buf_;
   // Only READY->START: after END the radio idles in RXIDLE, ready to be
   // re-armed with a single TASKS_START (no ramp-up) from poll().

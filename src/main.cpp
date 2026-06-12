@@ -26,6 +26,8 @@
 #define FRAME_SYNC1 0x55
 
 static NrfRadio radio;
+static uint16_t g_beaconSeq = 0;
+static uint32_t g_nextBeaconAtUs = 0;
 
 // CRC-8 (poly 0x07, init 0x00) over the forwarded payload, so the host can
 // reject any byte the USB link mangled.
@@ -84,6 +86,20 @@ static void forwardPacketBinary(const uint8_t* p, uint8_t len) {
 }
 #endif
 
+static void sendBeacon() {
+  uint8_t pkt[RadioLink::kBeaconLen];
+  uint8_t pos = 0;
+
+  pkt[pos++] = RadioLink::kBeaconMagic;
+  pkt[pos++] = RadioLink::kTdmaSlotCount;
+  memcpy(&pkt[pos], &g_beaconSeq, sizeof(g_beaconSeq)); pos += sizeof(g_beaconSeq);
+  const uint32_t frameUs = RadioLink::kTdmaFrameUs;
+  memcpy(&pkt[pos], &frameUs, sizeof(frameUs));
+
+  g_beaconSeq++;
+  radio.send(pkt, sizeof(pkt));
+}
+
 void setup() {
   Serial.begin(RX_SERIAL_BAUD);
   const unsigned long start = millis();
@@ -92,6 +108,7 @@ void setup() {
   }
 
   radio.beginRx();
+  g_nextBeaconAtUs = micros();
 
 #if RX_OUTPUT_TEXT
   Serial.println();
@@ -100,6 +117,15 @@ void setup() {
 }
 
 void loop() {
+  const uint32_t nowUs = micros();
+  if ((int32_t)(nowUs - g_nextBeaconAtUs) >= 0) {
+    sendBeacon();
+    g_nextBeaconAtUs += RadioLink::kTdmaFrameUs;
+    if ((int32_t)(nowUs - g_nextBeaconAtUs) >= 0) {
+      g_nextBeaconAtUs = nowUs + RadioLink::kTdmaFrameUs;
+    }
+  }
+
   uint8_t buf[RadioLink::kMaxLen];
   uint8_t len = 0;
 

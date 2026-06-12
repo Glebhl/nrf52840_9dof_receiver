@@ -12,10 +12,9 @@
 // link silently breaks (mismatched address/channel = no packets; mismatched
 // layout = garbage decode).
 //
-// Topology: many transmitters -> one receiver, all sharing ONE logical address
-// and ONE RF channel. Transmitters just blast packets stamped with their own
-// hardware device id; the receiver listens promiscuously and forwards
-// everything. No pairing, no per-device addresses, unlimited transmitters.
+// Topology: one receiver sends a short frame beacon, then transmitters reply in
+// fixed TDMA slots on the same RF channel. Each transmitter must have a unique
+// slot number for the active tracker set.
 // ---------------------------------------------------------------------------
 
 namespace RadioLink {
@@ -39,6 +38,13 @@ static const uint8_t  kPrefix0 = 0xE7;
 // is header(8) + every field(68) = 76; 96 leaves headroom.
 static const uint8_t  kMaxLen  = 96;
 
+// --- TDMA timing -----------------------------------------------------------
+// 30 Hz frame. The receiver sends one beacon at the start of each frame, then
+// trackers transmit in evenly spaced slots after this guard interval.
+static const uint32_t kTdmaFrameUs       = 33333UL;
+static const uint8_t  kTdmaSlotCount     = 5;
+static const uint32_t kTdmaBeaconGuardUs = 1000UL;
+
 // --- Packet protocol -------------------------------------------------------
 // Layout (little-endian), header is fixed, fields follow in flag-bit order and
 // only the enabled ones are present:
@@ -52,6 +58,14 @@ static const uint8_t  kMaxLen  = 96;
 // The flags byte is carried in every packet, so the receiver decodes any
 // transmitter without sharing its compile-time field selection.
 static const uint8_t kMagic = 0xA7;
+static const uint8_t kBeaconMagic = 0x5B;
+
+// Beacon layout:
+//   off 0 : uint8  magic       (kBeaconMagic)
+//   off 1 : uint8  slotCount   (kTdmaSlotCount)
+//   off 2 : uint16 frameSeq    (receiver frame counter, wraps)
+//   off 4 : uint32 frameUs     (kTdmaFrameUs)
+static const uint8_t kBeaconLen = 8;
 
 enum Field : uint8_t {
   kQuat  = 1 << 0,  // 4 floats: w, x, y, z

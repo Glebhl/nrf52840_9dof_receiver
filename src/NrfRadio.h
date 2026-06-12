@@ -13,7 +13,6 @@
 // so the radio is ours to drive directly). The high-frequency crystal is started
 // on begin*().
 //
-// A single instance is used in one role per sketch: call beginTx() XOR beginRx().
 class NrfRadio {
 public:
   // Configure the radio for transmitting. Returns true (kept boolean for
@@ -34,6 +33,7 @@ public:
 
 private:
   void startHfclk();
+  void disableRadio();
   void configureCommon();
   void startRx();
 
